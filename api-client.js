@@ -172,16 +172,18 @@ export const ApiClient = {
   },
 
   /**
-   * Update task execution count
-   * @param {string} taskId - Task ID
-   * @param {number} executionCount - New execution count
+   * Update task status via game/action/process endpoint
+   * @param {Object} task - Full task object from API
+   * @param {string} newStatus - New status (PENDING, DONE, DELIVERED)
    * @returns {Promise<Object>} - Updated task
    */
-  async updateTaskExecution(taskId, executionCount) {
-    const response = await fetch(`${API_BASE_URL}/tasks/${taskId}`, {
-      method: 'PATCH',
+  async updateTaskStatus(task, newStatus) {
+    const updatedTask = { ...task, status: newStatus };
+    
+    const response = await fetch(`${API_BASE_URL}/game/action/process`, {
+      method: 'POST',
       headers: this.getAuthHeaders(),
-      body: JSON.stringify({ executionCount })
+      body: JSON.stringify(updatedTask)
     });
 
     if (!response.ok) {
@@ -193,6 +195,42 @@ export const ApiClient = {
     }
 
     return response.json();
+  },
+
+  /**
+   * Mark the oldest PENDING task in a group as DONE
+   * @param {Object} aggregatedTask - Aggregated task with tasks array
+   * @returns {Promise<Object>} - Updated task
+   */
+  async markOldestPendingAsDone(aggregatedTask) {
+    // Find oldest PENDING task (sort by created_at ascending)
+    const pendingTasks = aggregatedTask.tasks
+      .filter(t => t.status === 'PENDING')
+      .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+    
+    if (pendingTasks.length === 0) {
+      throw new Error('No pending tasks to complete');
+    }
+    
+    return this.updateTaskStatus(pendingTasks[0], 'DONE');
+  },
+
+  /**
+   * Reopen the newest DONE task in a group (set to PENDING)
+   * @param {Object} aggregatedTask - Aggregated task with tasks array
+   * @returns {Promise<Object>} - Updated task
+   */
+  async reopenNewestDoneTask(aggregatedTask) {
+    // Find newest DONE task (sort by created_at descending)
+    const doneTasks = aggregatedTask.tasks
+      .filter(t => t.status === 'DONE')
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    
+    if (doneTasks.length === 0) {
+      throw new Error('No done tasks to reopen');
+    }
+    
+    return this.updateTaskStatus(doneTasks[0], 'PENDING');
   },
 
   /**

@@ -318,32 +318,42 @@ const UIController = {
   },
 
   /**
-   * Handle task increment (tap/click)
-   * @param {string} taskId - Task ID
+   * Handle task increment (tap/click) - marks oldest PENDING as DONE
+   * @param {string} taskId - Task ID (action_template_id)
    */
   async handleTaskIncrement(taskId) {
     const state = StateManager.getState();
     const task = state.tasks.find(t => t.id === taskId);
     
-    if (!task || task.isCompleted) return;
+    if (!task) return;
     
-    // Calculate new count using pure function (cap at targetCount)
-    const newCount = incrementExecutionCount(task);
+    // If already completed, show reopen modal
+    if (task.isCompleted) {
+      this.showReopenModal(taskId);
+      return;
+    }
+    
+    // Check if no pending tasks left
+    const pendingCount = task.tasks.filter(t => t.status === 'PENDING').length;
+    if (pendingCount === 0) return;
     
     // Optimistic update
+    const newCount = task.executionCount + 1;
     const updatedTasks = state.tasks.map(t => 
-      t.id === taskId ? { ...t, executionCount: newCount } : t
+      t.id === taskId ? { 
+        ...t, 
+        executionCount: newCount,
+        isCompleted: newCount === t.targetCount
+      } : t
     );
     StateManager.setState({ tasks: updatedTasks });
     
-    // Persist to API
+    // Persist to API - mark oldest PENDING as DONE
     try {
-      await ApiClient.updateTaskExecution(taskId, newCount);
+      await ApiClient.markOldestPendingAsDone(task);
       
-      // Check if completion prompt should be triggered using pure function
-      if (shouldTriggerCompletionPrompt(task, newCount)) {
-        this.showCompletionModal(taskId);
-      }
+      // Refresh tasks to get updated state
+      await this.fetchTasks();
     } catch (error) {
       // Revert optimistic update on failure
       if (error.message === 'SESSION_EXPIRED') {
@@ -355,27 +365,36 @@ const UIController = {
   },
 
   /**
-   * Handle task decrement (swipe left)
-   * @param {string} taskId - Task ID
+   * Handle task decrement (swipe left) - reopens newest DONE task
+   * @param {string} taskId - Task ID (action_template_id)
    */
   async handleTaskDecrement(taskId) {
     const state = StateManager.getState();
     const task = state.tasks.find(t => t.id === taskId);
     
-    if (!task || task.isCompleted) return;
+    if (!task) return;
     
-    // Calculate new count using pure function (floor at 0)
-    const newCount = decrementExecutionCount(task);
+    // Check if there are any DONE tasks to reopen
+    const doneCount = task.tasks.filter(t => t.status === 'DONE').length;
+    if (doneCount === 0) return;
     
     // Optimistic update
+    const newCount = Math.max(task.executionCount - 1, 0);
     const updatedTasks = state.tasks.map(t => 
-      t.id === taskId ? { ...t, executionCount: newCount } : t
+      t.id === taskId ? { 
+        ...t, 
+        executionCount: newCount,
+        isCompleted: false
+      } : t
     );
     StateManager.setState({ tasks: updatedTasks });
     
-    // Persist to API
+    // Persist to API - reopen newest DONE task
     try {
-      await ApiClient.updateTaskExecution(taskId, newCount);
+      await ApiClient.reopenNewestDoneTask(task);
+      
+      // Refresh tasks to get updated state
+      await this.fetchTasks();
     } catch (error) {
       // Revert optimistic update on failure
       if (error.message === 'SESSION_EXPIRED') {
@@ -384,6 +403,40 @@ const UIController = {
         StateManager.setState({ tasks: state.tasks, error: error.message });
       }
     }
+  },
+
+  // ==========================================================================
+  // Reopen Modal (for completed tasks)
+  // ==========================================================================
+
+  currentReopenTaskId: null,
+
+  /**
+   * Show reopen confirmation modal for completed tasks
+   * @param {string} taskId - Task ID
+   */
+  showReopenModal(taskId) {
+    this.currentReopenTaskId = taskId;
+    // Reuse completion modal but change text
+    const modalTitle = this.elements.completionModal.querySelector('h2');
+    const modalText = this.elements.completionModal.querySelector('p');
+    if (modalTitle) modalTitle.textContent = 'Reopen task?';
+    if (modalText) modalText.textContent = 'This will decrease the completion count by 1.';
+    this.elements.completionModal.classList.remove('hidden');
+  },
+
+  /**
+   * Handle reopen confirmation
+   */
+  async handleReopenConfirm() {
+    const taskId = this.currentReopenTaskId;
+    if (!taskId) return;
+    
+    this.hideCompletionModal();
+    this.currentReopenTaskId = null;
+    
+    // Trigger decrement which reopens the task
+    await this.handleTaskDecrement(taskId);
   },
 
   // ==========================================================================
@@ -402,47 +455,32 @@ const UIController = {
   },
 
   /**
-   * Hide completion modal
+   * Hide completion modal and reset state
    */
   hideCompletionModal() {
     this.currentCompletionTaskId = null;
+    this.currentReopenTaskId = null;
     this.elements.completionModal.classList.add('hidden');
+    
+    // Reset modal text to default
+    const modalTitle = this.elements.completionModal.querySelector('h2');
+    const modalText = this.elements.completionModal.querySelector('p');
+    if (modalTitle) modalTitle.textContent = 'Task completed?';
+    if (modalText) modalText.textContent = 'Mark this task as complete?';
   },
 
   /**
-   * Handle confirm completion button click
+   * Handle confirm button click (completion or reopen)
    */
   async handleConfirmCompletion() {
-    const taskId = this.currentCompletionTaskId;
-    if (!taskId) return;
-    
-    const state = StateManager.getState();
-    const task = state.tasks.find(t => t.id === taskId);
-    
-    if (!task) return;
-    
-    // Use pure function to get completed task
-    const completedTask = confirmCompletion(task);
-    
-    // Optimistic update
-    const updatedTasks = state.tasks.map(t => 
-      t.id === taskId ? completedTask : t
-    );
-    StateManager.setState({ tasks: updatedTasks });
-    
-    this.hideCompletionModal();
-    
-    // Persist to API
-    try {
-      await ApiClient.markTaskComplete(taskId);
-    } catch (error) {
-      // Revert optimistic update on failure
-      if (error.message === 'SESSION_EXPIRED') {
-        this.handleSessionExpired();
-      } else {
-        StateManager.setState({ tasks: state.tasks, error: error.message });
-      }
+    // Check if this is a reopen action
+    if (this.currentReopenTaskId) {
+      await this.handleReopenConfirm();
+      return;
     }
+    
+    // Otherwise it's a completion action (not used in current flow)
+    this.hideCompletionModal();
   },
 
   /**

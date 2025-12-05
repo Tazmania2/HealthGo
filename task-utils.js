@@ -16,7 +16,10 @@ export function renderTaskCard(task, isCompleted) {
   
   if (isCompleted) {
     return `
-      <div class="flex flex-col gap-4 rounded-xl bg-zinc-100 dark:bg-zinc-800/30 p-6" data-task-id="${task.id}">
+      <button 
+        class="task-card flex flex-col gap-4 rounded-xl bg-zinc-100 dark:bg-zinc-800/30 p-6 hover:bg-zinc-200 dark:hover:bg-zinc-800/50 transition-colors text-left w-full cursor-pointer" 
+        data-task-id="${task.id}"
+      >
         <div class="flex items-center justify-between">
           <div class="flex flex-col gap-1">
             <p class="text-xl font-bold text-zinc-500 dark:text-zinc-400 line-through">${task.name}</p>
@@ -27,7 +30,7 @@ export function renderTaskCard(task, isCompleted) {
         <div class="w-full overflow-hidden rounded-full bg-zinc-300 dark:bg-zinc-700 h-2.5">
           <div class="h-full rounded-full bg-green-500" style="width: 100%;"></div>
         </div>
-      </div>
+      </button>
     `;
   }
 
