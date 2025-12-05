@@ -65,7 +65,17 @@ export const ApiClient = {
     }
 
     const data = await response.json();
-    this.setToken(data.token);
+    // Use access_token from API response
+    const token = data.access_token || data.token || data.accessToken;
+    console.log('Login response:', data);
+    console.log('Extracted token:', token ? token.substring(0, 50) + '...' : 'none');
+    
+    if (!token) {
+      console.error('No token found in login response:', data);
+      throw new Error('Login failed: No token received');
+    }
+    
+    this.setToken(token);
     this.setUserEmail(credentials.email);
     return data;
   },
