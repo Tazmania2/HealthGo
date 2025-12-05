@@ -17,7 +17,7 @@ describe('ApiClient', () => {
   });
 
   describe('login', () => {
-    it('should return token and user on successful login (Requirement 1.1)', async () => {
+    it('should return token and user on successful login and store email (Requirement 1.1)', async () => {
       const mockResponse = {
         token: 'test-jwt-token',
         user: { id: '123', name: 'Test User' }
@@ -32,11 +32,12 @@ describe('ApiClient', () => {
 
       expect(result).toEqual(mockResponse);
       expect(ApiClient.token).toBe('test-jwt-token');
+      expect(ApiClient.userEmail).toBe('test@example.com');
       expect(global.fetch).toHaveBeenCalledWith(
         `${API_BASE_URL}/auth/login`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'client_id': 'template' },
           body: JSON.stringify({ email: 'test@example.com', password: 'password123' })
         }
       );
@@ -67,15 +68,15 @@ describe('ApiClient', () => {
     });
   });
 
-  describe('getTasks', () => {
+  describe('getTasksByStatus', () => {
     beforeEach(() => {
       ApiClient.token = 'valid-token';
+      ApiClient.userEmail = 'test@example.com';
     });
 
-    it('should fetch and return tasks array (Requirement 2.1)', async () => {
+    it('should fetch tasks by status with correct parameters', async () => {
       const mockTasks = [
-        { id: '1', name: 'Task 1', executionCount: 0, targetCount: 5 },
-        { id: '2', name: 'Task 2', executionCount: 3, targetCount: 10 }
+        { id: '1', name: 'Task 1', executionCount: 0, targetCount: 5 }
       ];
 
       global.fetch.mockResolvedValueOnce({
@@ -83,31 +84,20 @@ describe('ApiClient', () => {
         json: () => Promise.resolve({ tasks: mockTasks })
       });
 
-      const result = await ApiClient.getTasks();
+      const result = await ApiClient.getTasksByStatus('PENDING');
 
       expect(result).toEqual(mockTasks);
       expect(global.fetch).toHaveBeenCalledWith(
-        `${API_BASE_URL}/tasks`,
+        `${API_BASE_URL}/user-action/search?user_email=test%40example.com&STATUS=PENDING&use_pagination=false`,
         {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
+            'client_id': 'template',
             'Authorization': 'Bearer valid-token'
           }
         }
       );
-    });
-
-    it('should handle direct array response', async () => {
-      const mockTasks = [{ id: '1', name: 'Task 1' }];
-
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockTasks)
-      });
-
-      const result = await ApiClient.getTasks();
-      expect(result).toEqual(mockTasks);
     });
 
     it('should throw SESSION_EXPIRED on 401 response', async () => {
@@ -117,10 +107,46 @@ describe('ApiClient', () => {
         json: () => Promise.resolve({ message: 'Unauthorized' })
       });
 
-      await expect(ApiClient.getTasks()).rejects.toThrow('SESSION_EXPIRED');
+      await expect(ApiClient.getTasksByStatus('PENDING')).rejects.toThrow('SESSION_EXPIRED');
+    });
+  });
+
+  describe('getTasks', () => {
+    beforeEach(() => {
+      ApiClient.token = 'valid-token';
+      ApiClient.userEmail = 'test@example.com';
     });
 
-    it('should throw error on other failures', async () => {
+    it('should fetch PENDING, DONE, and DELIVERED tasks and combine them (Requirement 2.1)', async () => {
+      const pendingTasks = [{ id: '1', name: 'Pending Task' }];
+      const doneTasks = [{ id: '2', name: 'Done Task' }];
+      const deliveredTasks = [{ id: '3', name: 'Delivered Task' }];
+
+      global.fetch
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ tasks: pendingTasks }) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ tasks: doneTasks }) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ tasks: deliveredTasks }) });
+
+      const result = await ApiClient.getTasks();
+
+      expect(result).toHaveLength(3);
+      expect(result[0]).toEqual({ id: '1', name: 'Pending Task', isCompleted: false });
+      expect(result[1]).toEqual({ id: '2', name: 'Done Task', isCompleted: true });
+      expect(result[2]).toEqual({ id: '3', name: 'Delivered Task', isCompleted: true });
+      expect(global.fetch).toHaveBeenCalledTimes(3);
+    });
+
+    it('should handle empty task arrays', async () => {
+      global.fetch
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ tasks: [] }) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ tasks: [] }) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ tasks: [] }) });
+
+      const result = await ApiClient.getTasks();
+      expect(result).toEqual([]);
+    });
+
+    it('should throw error if any status fetch fails', async () => {
       global.fetch.mockResolvedValueOnce({
         ok: false,
         status: 500,
@@ -159,6 +185,7 @@ describe('ApiClient', () => {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
+            'client_id': 'template',
             'Authorization': 'Bearer valid-token'
           },
           body: JSON.stringify({ executionCount: 5 })
@@ -219,6 +246,7 @@ describe('ApiClient', () => {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
+            'client_id': 'template',
             'Authorization': 'Bearer valid-token'
           },
           body: JSON.stringify({ isCompleted: true })
@@ -247,21 +275,36 @@ describe('ApiClient', () => {
     });
   });
 
+  describe('getBaseHeaders', () => {
+    it('should return headers with client_id', () => {
+      const headers = ApiClient.getBaseHeaders();
+      
+      expect(headers).toEqual({ 
+        'Content-Type': 'application/json',
+        'client_id': 'template'
+      });
+    });
+  });
+
   describe('getAuthHeaders', () => {
-    it('should return headers without Authorization when no token', () => {
+    it('should return headers with client_id but without Authorization when no token', () => {
       ApiClient.token = null;
       const headers = ApiClient.getAuthHeaders();
       
-      expect(headers).toEqual({ 'Content-Type': 'application/json' });
+      expect(headers).toEqual({ 
+        'Content-Type': 'application/json',
+        'client_id': 'template'
+      });
       expect(headers.Authorization).toBeUndefined();
     });
 
-    it('should return headers with Authorization when token is set', () => {
+    it('should return headers with client_id and Authorization when token is set', () => {
       ApiClient.token = 'my-token';
       const headers = ApiClient.getAuthHeaders();
       
       expect(headers).toEqual({
         'Content-Type': 'application/json',
+        'client_id': 'template',
         'Authorization': 'Bearer my-token'
       });
     });

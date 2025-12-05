@@ -7,6 +7,7 @@ export const API_BASE_URL = 'https://g4u-mvp-api.onrender.com';
 
 export const ApiClient = {
   token: null,
+  userEmail: null,
 
   /**
    * Set the authentication token for API requests
@@ -17,12 +18,31 @@ export const ApiClient = {
   },
 
   /**
+   * Set the user email for API requests
+   * @param {string} email - User email
+   */
+  setUserEmail(email) {
+    this.userEmail = email;
+  },
+
+  /**
+   * Get base headers (required for all requests)
+   * @returns {Object} Headers object with client_id
+   */
+  getBaseHeaders() {
+    return {
+      'Content-Type': 'application/json',
+      'client_id': 'template'
+    };
+  },
+
+  /**
    * Get authorization headers
-   * @returns {Object} Headers object with Authorization
+   * @returns {Object} Headers object with client_id and Authorization
    */
   getAuthHeaders() {
     return {
-      'Content-Type': 'application/json',
+      ...this.getBaseHeaders(),
       ...(this.token && { 'Authorization': `Bearer ${this.token}` })
     };
   },
@@ -35,8 +55,8 @@ export const ApiClient = {
   async login(credentials) {
     const response = await fetch(`${API_BASE_URL}/auth/login`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(credentials)
+      headers: this.getBaseHeaders(),
+      body: JSON.stringify({ email: credentials.email, password: credentials.password })
     });
 
     if (!response.ok) {
@@ -46,15 +66,23 @@ export const ApiClient = {
 
     const data = await response.json();
     this.setToken(data.token);
+    this.setUserEmail(credentials.email);
     return data;
   },
 
   /**
-   * Fetch user's tasks from G4U API
+   * Fetch tasks by status from user-action/search endpoint
+   * @param {string} status - Task status (PENDING, DONE, DELIVERED)
    * @returns {Promise<Array>} - Array of task objects
    */
-  async getTasks() {
-    const response = await fetch(`${API_BASE_URL}/tasks`, {
+  async getTasksByStatus(status) {
+    const params = new URLSearchParams({
+      user_email: this.userEmail,
+      STATUS: status,
+      use_pagination: 'false'
+    });
+
+    const response = await fetch(`${API_BASE_URL}/user-action/search?${params}`, {
       method: 'GET',
       headers: this.getAuthHeaders()
     });
@@ -68,7 +96,38 @@ export const ApiClient = {
     }
 
     const data = await response.json();
-    return data.tasks || data;
+    return data.tasks || data.data || data || [];
+  },
+
+  /**
+   * Fetch user's tasks from G4U API (PENDING + DONE/DELIVERED)
+   * @returns {Promise<Array>} - Array of task objects with isCompleted flag
+   */
+  async getTasks() {
+    // Fetch PENDING tasks (active)
+    const pendingTasks = await this.getTasksByStatus('PENDING');
+    
+    // Fetch DONE tasks (completed)
+    const doneTasks = await this.getTasksByStatus('DONE');
+    
+    // Fetch DELIVERED tasks (also completed)
+    const deliveredTasks = await this.getTasksByStatus('DELIVERED');
+
+    // Map tasks to include isCompleted flag
+    const activeTasks = (Array.isArray(pendingTasks) ? pendingTasks : []).map(task => ({
+      ...task,
+      isCompleted: false
+    }));
+
+    const completedTasks = [
+      ...(Array.isArray(doneTasks) ? doneTasks : []),
+      ...(Array.isArray(deliveredTasks) ? deliveredTasks : [])
+    ].map(task => ({
+      ...task,
+      isCompleted: true
+    }));
+
+    return [...activeTasks, ...completedTasks];
   },
 
   /**
