@@ -88,7 +88,7 @@ export const ApiClient = {
   async getTasksByStatus(status) {
     const params = new URLSearchParams({
       user_email: this.userEmail,
-      STATUS: status,
+      status: status,
       use_pagination: 'false'
     });
 
