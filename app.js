@@ -144,29 +144,60 @@ const UIController = {
     const taskCards = document.querySelectorAll('.task-card');
     
     taskCards.forEach(card => {
-      let touchStartX = 0;
+      let startX = 0;
+      let isDragging = false;
       
       // Click/tap handler for increment
-      card.addEventListener('click', () => {
-        const taskId = card.dataset.taskId;
-        this.handleTaskIncrement(taskId);
+      card.addEventListener('click', (e) => {
+        // Only trigger if not a drag/swipe
+        if (!isDragging) {
+          const taskId = card.dataset.taskId;
+          this.handleTaskIncrement(taskId);
+        }
       });
       
       // Touch handlers for swipe detection
       card.addEventListener('touchstart', (e) => {
-        touchStartX = e.changedTouches[0].screenX;
+        startX = e.changedTouches[0].screenX;
+        isDragging = false;
       }, { passive: true });
       
       card.addEventListener('touchend', (e) => {
-        const touchEndX = e.changedTouches[0].screenX;
-        const swipeDistance = touchStartX - touchEndX;
+        const endX = e.changedTouches[0].screenX;
+        const swipeDistance = startX - endX;
         
         // Detect right-to-left swipe (minimum 50px)
         if (swipeDistance > 50) {
+          isDragging = true;
           e.preventDefault();
           const taskId = card.dataset.taskId;
           this.handleTaskDecrement(taskId);
         }
+      });
+      
+      // Mouse handlers for drag detection (desktop)
+      card.addEventListener('mousedown', (e) => {
+        startX = e.screenX;
+        isDragging = false;
+      });
+      
+      card.addEventListener('mouseup', (e) => {
+        const endX = e.screenX;
+        const swipeDistance = startX - endX;
+        
+        // Detect right-to-left drag (minimum 50px)
+        if (swipeDistance > 50) {
+          isDragging = true;
+          e.preventDefault();
+          e.stopPropagation();
+          const taskId = card.dataset.taskId;
+          this.handleTaskDecrement(taskId);
+        }
+      });
+      
+      // Prevent click after drag
+      card.addEventListener('mouseleave', () => {
+        isDragging = false;
       });
     });
   },
