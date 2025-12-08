@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Login Screen</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary": "#0d7ff2",
+              "background-light": "#f5f7f8",
+              "background-dark": "#101922",
+            },
+            fontFamily: {
+              "display": ["Inter", "sans-serif"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            font-size: 24px;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark font-display">
+<div class="relative flex h-auto min-h-screen w-full flex-col items-center bg-[#101a23] dark group/design-root overflow-x-hidden p-4">
+<div class="flex w-full max-w-md flex-col items-center pt-20">
+<!-- App Icon/Logo -->
+<div class="mb-8 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#0d80f2]">
+<span class="material-symbols-outlined text-white" style="font-size: 40px;">factory</span>
+</div>
+<!-- HeadlineText -->
+<h1 class="text-white tracking-light text-[32px] font-bold leading-tight text-center pb-2 pt-6">Welcome Back</h1>
+<!-- BodyText -->
+<p class="text-white/70 text-base font-normal leading-normal pb-8 text-center">Sign in to your factory management account</p>
+<div class="flex w-full flex-col gap-4">
+<!-- TextField: Email -->
+<div class="flex w-full flex-wrap items-end">
+<label class="flex w-full flex-col min-w-40 flex-1">
+<p class="text-white text-base font-medium leading-normal pb-2">Email or Employee ID</p>
+<input class="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-white focus:outline-0 focus:ring-2 focus:ring-[#0d80f2]/50 border border-[#314d68] bg-[#182634] focus:border-[#0d80f2] h-14 placeholder:text-[#90adcb] p-[15px] text-base font-normal leading-normal" placeholder="Enter your email or ID" value=""/>
+</label>
+</div>
+<!-- TextField: Password -->
+<div class="flex w-full flex-wrap items-end">
+<label class="flex w-full flex-col min-w-40 flex-1">
+<p class="text-white text-base font-medium leading-normal pb-2">Password</p>
+<div class="relative flex w-full flex-1 items-stretch">
+<input class="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-white focus:outline-0 focus:ring-2 focus:ring-[#0d80f2]/50 border border-[#314d68] bg-[#182634] focus:border-[#0d80f2] h-14 placeholder:text-[#90adcb] p-[15px] pr-12 text-base font-normal leading-normal" placeholder="Enter your password" type="password" value=""/>
+<button class="absolute inset-y-0 right-0 flex items-center pr-4 text-[#90adcb] hover:text-white">
+<span class="material-symbols-outlined">visibility</span>
+</button>
+</div>
+</label>
+</div>
+</div>
+<!-- SingleButton: Log In -->
+<div class="flex w-full px-0 py-6">
+<button class="flex min-w-[84px] max-w-full cursor-pointer items-center justify-center overflow-hidden rounded-lg h-12 px-5 flex-1 bg-[#0d80f2] text-white text-base font-bold leading-normal tracking-[0.015em] hover:bg-[#0b6bce] transition-colors">
+<span class="truncate">Log In</span>
+</button>
+</div>
+<!-- Forgot Password Link -->
+<a class="text-[#0d80f2] text-sm font-medium leading-normal hover:underline" href="#">Forgot Password?</a>
+</div>
+</div>
+</body></html>
