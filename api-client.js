@@ -3,6 +3,8 @@
  * Handles all communication with the G4U API
  */
 
+import { extractPriority } from './task-utils.js';
+
 export const API_BASE_URL = 'https://g4u-mvp-api.onrender.com';
 
 export const ApiClient = {
@@ -112,8 +114,9 @@ export const ApiClient = {
   /**
    * Aggregate tasks by action_template_id
    * Groups tasks with same template, counts completed vs total
+   * Extracts priority from first task's comments (Requirements: 3.1)
    * @param {Array} allTasks - All raw tasks from API
-   * @returns {Array} - Aggregated task objects
+   * @returns {Array} - Aggregated task objects with priority field
    */
   aggregateTasks(allTasks) {
     const grouped = {};
@@ -122,13 +125,17 @@ export const ApiClient = {
       const templateId = task.action_template_id || task.id;
       
       if (!grouped[templateId]) {
+        // Extract priority from first task's comments (Requirements: 3.1)
+        const priority = extractPriority(task.comments);
+        
         grouped[templateId] = {
           id: templateId,
           name: task.action_title || 'Unnamed Task',
           teamName: task.team_name,
           tasks: [],
           executionCount: 0,
-          targetCount: 0
+          targetCount: 0,
+          priority: priority
         };
       }
       

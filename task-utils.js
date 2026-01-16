@@ -1,12 +1,68 @@
 /**
  * Task Utilities Module
  * Pure functions for task rendering and sorting
- * Requirements: 2.2, 2.3, 2.4
+ * Requirements: 2.2, 2.3, 2.4, 3.1, 3.2, 3.3, 3.4
  */
 
 /**
+ * Get border color class for priority
+ * Maps priority value to Tailwind border color class
+ * Requirements: 2.2, 2.3, 2.4, 2.5
+ * @param {number} priority - Priority value (1-10)
+ * @returns {string} Tailwind border color class
+ */
+export function getPriorityBorderColor(priority) {
+  // High priority (1-3): red
+  if (priority >= 1 && priority <= 3) {
+    return 'border-l-red-500';
+  }
+  // Medium priority (4-7): yellow
+  if (priority >= 4 && priority <= 7) {
+    return 'border-l-yellow-500';
+  }
+  // Low priority (8-10) or default: blue
+  return 'border-l-blue-500';
+}
+
+/**
+ * Extract priority from comments array
+ * Parses "PRIORITY:X" pattern from comments, returns first match
+ * Requirements: 3.1, 3.2, 3.3, 3.4
+ * @param {string[]} comments - Array of comment strings
+ * @returns {number} Priority value (1-10, default 10)
+ */
+export function extractPriority(comments) {
+  // Handle null, undefined, or non-array inputs - default to 10
+  if (!comments || !Array.isArray(comments) || comments.length === 0) {
+    return 10;
+  }
+
+  // Search for first "PRIORITY:X" pattern (supports negative numbers)
+  for (const comment of comments) {
+    if (typeof comment !== 'string') continue;
+    
+    const match = comment.match(/PRIORITY:(-?\d+)/i);
+    if (match) {
+      const value = parseInt(match[1], 10);
+      
+      // Handle NaN case - default to 10
+      if (isNaN(value)) {
+        return 10;
+      }
+      
+      // Clamp to valid range 1-10
+      return Math.max(1, Math.min(10, value));
+    }
+  }
+
+  // No PRIORITY pattern found - default to 10
+  return 10;
+}
+
+/**
  * Render a single task card HTML
- * @param {Object} task - Task object
+ * Requirements: 2.1 - Active task cards display colored left border indicating priority level
+ * @param {Object} task - Task object with optional priority field
  * @param {boolean} isCompleted - Whether task is completed
  * @returns {string} HTML string
  */
@@ -37,9 +93,13 @@ export function renderTaskCard(task, isCompleted) {
   // Add conflict styling if task has conflict
   const conflictClass = task.hasConflict ? 'ring-2 ring-red-500 animate-pulse' : '';
   
+  // Get priority border color for active tasks (Requirements: 2.1)
+  const priority = task.priority ?? 10;
+  const priorityBorderColor = getPriorityBorderColor(priority);
+  
   return `
     <button 
-      class="task-card flex flex-col gap-4 rounded-xl bg-white dark:bg-zinc-800/50 p-6 shadow-sm hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors text-left w-full ${conflictClass}"
+      class="task-card flex flex-col gap-4 rounded-xl bg-white dark:bg-zinc-800/50 p-6 shadow-sm hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors text-left w-full border-l-4 ${priorityBorderColor} ${conflictClass}"
       data-task-id="${task.id}"
     >
       <div class="flex items-center justify-between">
@@ -57,15 +117,36 @@ export function renderTaskCard(task, isCompleted) {
 }
 
 /**
- * Sort tasks with active first, completed last
- * @param {Array} tasks - Array of task objects
- * @returns {Array} Sorted tasks
+ * Sort tasks with active first (sorted by priority ascending), completed last
+ * Requirements: 1.1, 1.3, 1.4
+ * @param {Array} tasks - Array of task objects with optional priority field
+ * @returns {Array} Sorted tasks - active tasks by priority (1 first, 10 last), then completed
  */
 export function sortTasks(tasks) {
-  return [...tasks].sort((a, b) => {
-    if (a.isCompleted === b.isCompleted) return 0;
-    return a.isCompleted ? 1 : -1;
+  // Create a copy with original indices for stable sort
+  const tasksWithIndex = tasks.map((task, index) => ({ task, originalIndex: index }));
+  
+  tasksWithIndex.sort((a, b) => {
+    // First: separate active from completed (active first)
+    if (a.task.isCompleted !== b.task.isCompleted) {
+      return a.task.isCompleted ? 1 : -1;
+    }
+    
+    // For active tasks: sort by priority ascending (1 first, 10 last)
+    if (!a.task.isCompleted) {
+      const priorityA = a.task.priority ?? 10;
+      const priorityB = b.task.priority ?? 10;
+      
+      if (priorityA !== priorityB) {
+        return priorityA - priorityB;
+      }
+    }
+    
+    // For equal priorities or completed tasks: maintain original order (stable sort)
+    return a.originalIndex - b.originalIndex;
   });
+  
+  return tasksWithIndex.map(item => item.task);
 }
 
 /**
